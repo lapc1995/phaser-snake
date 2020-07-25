@@ -6,7 +6,7 @@
 <body>
 
     <script>
-    var config = {
+    const config = {
         type: Phaser.AUTO,
         width: 800,
         height: 600,
@@ -20,10 +20,6 @@
             preload: preload,
             create: create,
             update: update
-        },
-        fps: {
-            target: 1000,
-            forceSetTimeOut: true
         },
     };
 
@@ -40,42 +36,10 @@
 
     let growSnake = false;
 
-    function preload ()
-    {
-        this.load.setBaseURL('http://labs.phaser.io');
+    function preload () { }
 
-        this.load.image('sky', 'assets/skies/space3.png');
-        this.load.image('logo', 'assets/sprites/phaser3-logo.png');
-        this.load.image('red', 'assets/particles/red.png');
-    }
-
-    function create ()
-    {
-        /*
-        this.add.image(400, 300, 'sky');
-
-        var particles = this.add.particles('red');
-
-        var emitter = particles.createEmitter({
-            speed: 1000,
-            scale: { start: 1, end: 0 },
-            blendMode: 'ADD'
-        });
-
-        var logo = this.physics.add.image(400, 100, 'logo');
-
-        logo.setVelocity(100, 200);
-        logo.setBounce(1, 1);
-        logo.setCollideWorldBounds(true);
-
-        emitter.startFollow(logo);
-        */
-
-        setSnakeHead(250,200, this);
-        addSnakePiece(225,200, this);
-        addSnakePiece(200,200, this);
-
-        setApple(this);
+    function create () {
+        gameStart(this);
     }
 
     function update (time, delta) {
@@ -83,51 +47,31 @@
         const cursors = this.input.keyboard.createCursorKeys();
         if (cursors.left.isDown && direction != 'r' && direction != 'l')
             direction = 'l';
-        if (cursors.right.isDown && direction != 'r' && direction != 'l')
+        else if (cursors.right.isDown && direction != 'r' && direction != 'l')
             direction = 'r';
-        if (cursors.up.isDown && direction != 'u' && direction != 'd')
+        else if (cursors.up.isDown && direction != 'u' && direction != 'd')
             direction = 'u';
-        if (cursors.down.isDown && direction != 'u' && direction != 'd')
+        else if (cursors.down.isDown && direction != 'u' && direction != 'd')
             direction = 'd';
 
         elapsedTime += delta;
 
-        if(elapsedTime > 100) {
+        if(elapsedTime > 50) {
 
             let prevX = snakeHead.rect.x; 
             let prevY = snakeHead.rect.y;
 
-            switch(direction) {
-
-                case 'r':
-                    snakeHead.rect.x += tileSize;
-                    if(snakeHead.rect.x > 800 - tileSize)
-                        snakeHead.rect.x = 0;
-                    break;
-
-                case 'l':
-                    snakeHead.rect.x -= tileSize;
-                    if(snakeHead.rect.x < 0)
-                        snakeHead.rect.x = 800-tileSize;
-                    break;
-
-                case 'u':
-                    snakeHead.rect.y -= tileSize;
-                    if(snakeHead.rect.y < 0)
-                        snakeHead.rect.y = 600-tileSize;
-                    break;
-
-                case 'd':
-                    snakeHead.rect.y += tileSize;
-                    if(snakeHead.rect.y > 600 - tileSize)
-                        snakeHead.rect.y = 0;
-                    break;
+            const boundsCheck = {
+                'r' : () => snakeHead.rect.x = snakeHead.rect.x > 800 - (tileSize * 2) ? 0 : snakeHead.rect.x + tileSize,
+                'l' : () => snakeHead.rect.x = snakeHead.rect.x < tileSize ? 800 - tileSize : snakeHead.rect.x - tileSize,
+                'u' : () => snakeHead.rect.y = snakeHead.rect.y < tileSize ? 600 - tileSize : snakeHead.rect.y - tileSize,
+                'd' : () => snakeHead.rect.y = snakeHead.rect.y > 600 - (tileSize * 2) ? 0 : snakeHead.rect.y + tileSize,
             }
-    
+            boundsCheck[direction]();    
             updateSnakePieceGraphics(snakeHead, this);
 
             if(growSnake) {
-                eatApple(prevX,prevY, this);
+                addSnakePiece(prevX,prevY, this);
                 growSnake = false;
             } else {
                 for(let i = 0; i < snakeBody.length; i++) {
@@ -148,13 +92,35 @@
                 setApple(this);
                 growSnake = true;
             } else if(selfC) {
-                
+                gameStart(this);
             }
 
             elapsedTime = 0.0;
             
         }
         
+    }
+
+    function gameStart(game) {
+
+        direction = 'r';
+
+        if(snakeHead != undefined) {
+            snakeHead.graphics.destroy();
+        }
+
+        for(bodyPart of snakeBody) {
+            bodyPart.graphics.destroy();
+        }
+        snakeBody.length = 0;
+
+        if(apple != undefined)
+            apple.graphics.destroy();
+
+        setSnakeHead(250,200, game);
+        addSnakePiece(250,200, game);
+        addSnakePiece(225,200, game);
+        setApple(game);
     }
 
     function setSnakeHead(x,y, game) {
@@ -165,22 +131,13 @@
         snakeHead = {rect, graphics, color}
     }
 
-    function eatApple(x, y, game) {
-        var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
-        var graphics = game.add.graphics({ fillStyle: { color: 0x0000ff } });
-        var color = 0x0000ff;
-        graphics.fillRectShape(rect);
-        let head = {rect, graphics, color}
-        snakeBody.unshift(head);
-    }
-
     function addSnakePiece(x,y, game) {
         var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
         var graphics = game.add.graphics({ fillStyle: { color: 0x0000ff } });
         var color = 0x0000ff;
         graphics.fillRectShape(rect);
         let head = {rect, graphics, color}
-        snakeBody.push(head);
+        snakeBody.unshift(head);
     }
 
     function updateSnakePieceGraphics(piece, game) {
@@ -197,7 +154,7 @@
         let circle;
 
         do {
-            
+
             let x = Math.floor(Math.random() * (800 - tileSize + 1)) + tileSize;
             let y = Math.floor(Math.random() * (600 - tileSize + 1)) + tileSize;
 
@@ -228,8 +185,8 @@
 
     function collisionCheck() {
 
-        let self = false;
-        for(let i = 1; i < snakeBody.length && !self; i++)
+        let selfC = false;
+        for(let i = 0; i < snakeBody.length && !selfC; i++)
             selfC = Phaser.Geom.Rectangle.Overlaps(snakeHead.rect, snakeBody[i].rect);
 
         let appleC = Phaser.Geom.Rectangle.Overlaps(snakeHead.rect, apple.circle);
