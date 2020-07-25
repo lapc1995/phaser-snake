@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.15.1/dist/phaser-arcade-physics.min.js"></script>
+</head>
+<body>
+
+    <script>
+    var config = {
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 200 }
+            }
+        },
+        scene: {
+            preload: preload,
+            create: create,
+            update: update
+        },
+        fps: {
+            target: 1000,
+            forceSetTimeOut: true
+        },
+    };
+
+    const game = new Phaser.Game(config);
+
+    const tileSize = 25;
+
+    let snakeHead;
+    const snakeBody = [];
+    let apple;
+
+    let elapsedTime = 0.0;
+    let direction = 'r';
+
+    let growSnake = false;
+
+    function preload ()
+    {
+        this.load.setBaseURL('http://labs.phaser.io');
+
+        this.load.image('sky', 'assets/skies/space3.png');
+        this.load.image('logo', 'assets/sprites/phaser3-logo.png');
+        this.load.image('red', 'assets/particles/red.png');
+    }
+
+    function create ()
+    {
+        /*
+        this.add.image(400, 300, 'sky');
+
+        var particles = this.add.particles('red');
+
+        var emitter = particles.createEmitter({
+            speed: 1000,
+            scale: { start: 1, end: 0 },
+            blendMode: 'ADD'
+        });
+
+        var logo = this.physics.add.image(400, 100, 'logo');
+
+        logo.setVelocity(100, 200);
+        logo.setBounce(1, 1);
+        logo.setCollideWorldBounds(true);
+
+        emitter.startFollow(logo);
+        */
+
+        setSnakeHead(250,200, this);
+        addSnakePiece(225,200, this);
+        addSnakePiece(200,200, this);
+
+        setApple(this);
+    }
+
+    function update (time, delta) {
+
+        const cursors = this.input.keyboard.createCursorKeys();
+        if (cursors.left.isDown && direction != 'r' && direction != 'l')
+            direction = 'l';
+        if (cursors.right.isDown && direction != 'r' && direction != 'l')
+            direction = 'r';
+        if (cursors.up.isDown && direction != 'u' && direction != 'd')
+            direction = 'u';
+        if (cursors.down.isDown && direction != 'u' && direction != 'd')
+            direction = 'd';
+
+        elapsedTime += delta;
+
+        if(elapsedTime > 100) {
+
+            let prevX = snakeHead.rect.x; 
+            let prevY = snakeHead.rect.y;
+
+            switch(direction) {
+
+                case 'r':
+                    snakeHead.rect.x += tileSize;
+                    if(snakeHead.rect.x > 800 - tileSize)
+                        snakeHead.rect.x = 0;
+                    break;
+
+                case 'l':
+                    snakeHead.rect.x -= tileSize;
+                    if(snakeHead.rect.x < 0)
+                        snakeHead.rect.x = 800-tileSize;
+                    break;
+
+                case 'u':
+                    snakeHead.rect.y -= tileSize;
+                    if(snakeHead.rect.y < 0)
+                        snakeHead.rect.y = 600-tileSize;
+                    break;
+
+                case 'd':
+                    snakeHead.rect.y += tileSize;
+                    if(snakeHead.rect.y > 600 - tileSize)
+                        snakeHead.rect.y = 0;
+                    break;
+            }
+    
+            updateSnakePieceGraphics(snakeHead, this);
+
+            if(growSnake) {
+                eatApple(prevX,prevY, this);
+                growSnake = false;
+            } else {
+                for(let i = 0; i < snakeBody.length; i++) {
+                    let tempX = snakeBody[i].rect.x;
+                    let tempY = snakeBody[i].rect.y;
+                    snakeBody[i].rect.x = prevX;
+                    snakeBody[i].rect.y = prevY;
+                    prevX = tempX;
+                    prevY = tempY;
+                    updateSnakePieceGraphics(snakeBody[i], this);
+                }
+            }
+
+            const {selfC, appleC} = collisionCheck();
+
+            if(appleC) {
+                removeApple();
+                setApple(this);
+                growSnake = true;
+            } else if(selfC) {
+                
+            }
+
+            elapsedTime = 0.0;
+            
+        }
+        
+    }
+
+    function setSnakeHead(x,y, game) {
+        var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
+        var graphics = game.add.graphics({ fillStyle: { color: 0xff00ff } });
+        graphics.fillRectShape(rect);
+        var color = 0xff00ff;
+        snakeHead = {rect, graphics, color}
+    }
+
+    function eatApple(x, y, game) {
+        var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
+        var graphics = game.add.graphics({ fillStyle: { color: 0x0000ff } });
+        var color = 0x0000ff;
+        graphics.fillRectShape(rect);
+        let head = {rect, graphics, color}
+        snakeBody.unshift(head);
+    }
+
+    function addSnakePiece(x,y, game) {
+        var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
+        var graphics = game.add.graphics({ fillStyle: { color: 0x0000ff } });
+        var color = 0x0000ff;
+        graphics.fillRectShape(rect);
+        let head = {rect, graphics, color}
+        snakeBody.push(head);
+    }
+
+    function updateSnakePieceGraphics(piece, game) {
+        let ngraphics = game.add.graphics({ fillStyle: { color:  piece.color} });
+        piece.graphics.destroy();
+        ngraphics.fillRectShape(piece.rect);
+        piece.graphics = ngraphics;
+    }
+
+    function setApple(game) {
+
+        let colliding = false;
+        let getters;
+        let circle;
+
+        do {
+            
+            let x = Math.floor(Math.random() * (800 - tileSize + 1)) + tileSize;
+            let y = Math.floor(Math.random() * (600 - tileSize + 1)) + tileSize;
+
+            console.log(x,y);
+            x = Math.floor(x / tileSize) * tileSize - (tileSize / 2);
+            y = Math.floor(y / tileSize) * tileSize - (tileSize / 2);
+            console.log(x,y);
+
+            circle = new Phaser.Geom.Circle(x, y, tileSize / 2);
+            
+            for(let i = 1; i < snakeBody.length && !colliding; i++)
+                colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeBody[i].rect);
+
+            if(!colliding)
+                colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeHead.rect);
+
+        } while (colliding);
+
+        graphics = game.add.graphics({ fillStyle: { color: 0xff0000 } });
+        graphics.fillCircleShape(circle);
+        apple = {circle, graphics}
+
+    }
+
+    function removeApple() {
+        apple.graphics.destroy();
+    }
+
+    function collisionCheck() {
+
+        let self = false;
+        for(let i = 1; i < snakeBody.length && !self; i++)
+            selfC = Phaser.Geom.Rectangle.Overlaps(snakeHead.rect, snakeBody[i].rect);
+
+        let appleC = Phaser.Geom.Rectangle.Overlaps(snakeHead.rect, apple.circle);
+
+        return {selfC, appleC};
+
+    }
+
+    </script>
+
+</body>
+</html>
