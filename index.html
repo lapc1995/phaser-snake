@@ -35,8 +35,24 @@
     let direction = 'r';
 
     let growSnake = false;
+    let growType = undefined;
 
-    function preload () { }
+    function preload () {
+
+        this.load.image('robot_head_blue', 'assets/sprites/robot_head_blue.png');
+        this.load.image('robot_head_green', 'assets/sprites/robot_head_green.png');
+        this.load.image('robot_head_yellow', 'assets/sprites/robot_head_yellow.png');
+        this.load.image('robot_head_red', 'assets/sprites/robot_head_red.png');
+
+        this.load.image('robot_blue', 'assets/sprites/robot_blue.png');
+        this.load.image('robot_green', 'assets/sprites/robot_green.png');
+        this.load.image('robot_yellow', 'assets/sprites/robot_yellow.png');
+        this.load.image('robot_red', 'assets/sprites/robot_red.png');
+
+        this.load.image('tile_grass_1', 'assets/sprites/tileGrass1.png');
+        this.load.image('tile_grass_2', 'assets/sprites/tileGrass2.png');
+
+    }
 
     function create () {
         gameStart(this);
@@ -45,14 +61,19 @@
     function update (time, delta) {
 
         const cursors = this.input.keyboard.createCursorKeys();
-        if (cursors.left.isDown && direction != 'r' && direction != 'l')
+        if (cursors.left.isDown && direction != 'r' && direction != 'l') {
             direction = 'l';
-        else if (cursors.right.isDown && direction != 'r' && direction != 'l')
+        }else if (cursors.right.isDown && direction != 'r' && direction != 'l') {
             direction = 'r';
-        else if (cursors.up.isDown && direction != 'u' && direction != 'd')
+        }
+        else if (cursors.up.isDown && direction != 'u' && direction != 'd') {
             direction = 'u';
-        else if (cursors.down.isDown && direction != 'u' && direction != 'd')
+        }
+        else if (cursors.down.isDown && direction != 'u' && direction != 'd') {
             direction = 'd';
+        }
+
+        snakeHead.direction = direction;
 
         elapsedTime += delta;
 
@@ -60,6 +81,7 @@
 
             let prevX = snakeHead.rect.x; 
             let prevY = snakeHead.rect.y;
+            let prevDirection = snakeHead.direction;
 
             const boundsCheck = {
                 'r' : () => snakeHead.rect.x = snakeHead.rect.x > 800 - (tileSize * 2) ? 0 : snakeHead.rect.x + tileSize,
@@ -70,24 +92,29 @@
             boundsCheck[direction]();    
             updateSnakePieceGraphics(snakeHead, this);
 
-            if(growSnake) {
-                addSnakePiece(prevX,prevY, this);
-                growSnake = false;
-            } else {
-                for(let i = 0; i < snakeBody.length; i++) {
-                    let tempX = snakeBody[i].rect.x;
-                    let tempY = snakeBody[i].rect.y;
-                    snakeBody[i].rect.x = prevX;
-                    snakeBody[i].rect.y = prevY;
-                    prevX = tempX;
-                    prevY = tempY;
-                    updateSnakePieceGraphics(snakeBody[i], this);
-                }
+            for(let i = 0; i < snakeBody.length; i++) {
+                let tempX = snakeBody[i].rect.x;
+                let tempY = snakeBody[i].rect.y;
+                let tempDirection = snakeBody[i].direction;
+                snakeBody[i].rect.x = prevX;
+                snakeBody[i].rect.y = prevY;
+                snakeBody[i].direction = prevDirection;
+                prevX = tempX;
+                prevY = tempY;
+                prevDirection = tempDirection;
+                updateSnakePieceGraphics(snakeBody[i], this);
             }
+
+            if(growSnake) {
+                addSnakePiece(prevX,prevY, direction, this, growType);
+                growSnake = false;
+                growType = undefined;
+            } 
 
             const {selfC, appleC} = collisionCheck();
 
             if(appleC) {
+                growType = apple.spriteType;
                 removeApple();
                 setApple(this);
                 growSnake = true;
@@ -103,84 +130,99 @@
 
     function gameStart(game) {
 
+        renderBackground(game); 
+
         direction = 'r';
 
         if(snakeHead != undefined) {
-            snakeHead.graphics.destroy();
+            snakeHead.sprite.destroy();
         }
 
         for(bodyPart of snakeBody) {
-            bodyPart.graphics.destroy();
+            bodyPart.sprite.destroy();
         }
         snakeBody.length = 0;
 
         if(apple != undefined)
-            apple.graphics.destroy();
+            apple.sprite.destroy();
 
         setSnakeHead(250,200, game);
-        addSnakePiece(250,200, game);
-        addSnakePiece(225,200, game);
         setApple(game);
     }
 
     function setSnakeHead(x,y, game) {
         var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
-        var graphics = game.add.graphics({ fillStyle: { color: 0xff00ff } });
-        graphics.fillRectShape(rect);
-        var color = 0xff00ff;
-        snakeHead = {rect, graphics, color}
+        let spriteType = Phaser.Math.RND.pick(['robot_head_blue', 'robot_head_green', 'robot_head_red', 'robot_head_yellow']);
+        var sprite = game.add.image(x+(tileSize/2), y+(tileSize/2),spriteType);
+        sprite.setScale(0.2)
+        var direction = 'r';
+        snakeHead = {rect, sprite, direction}
     }
 
-    function addSnakePiece(x,y, game) {
+    function addSnakePiece(x,y, direction, game, type = 'robot_blue') {
         var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
-        var graphics = game.add.graphics({ fillStyle: { color: 0x0000ff } });
-        var color = 0x0000ff;
-        graphics.fillRectShape(rect);
-        let head = {rect, graphics, color}
-        snakeBody.unshift(head);
+        var sprite = game.add.image(x+(tileSize/2), y+(tileSize/2), type).setScale(0.2);
+        let piece = {rect, sprite, direction};
+        snakeBody.push(piece);
     }
 
     function updateSnakePieceGraphics(piece, game) {
-        let ngraphics = game.add.graphics({ fillStyle: { color:  piece.color} });
-        piece.graphics.destroy();
-        ngraphics.fillRectShape(piece.rect);
-        piece.graphics = ngraphics;
+
+        piece.sprite.x = piece.rect.x + (tileSize/2);
+        piece.sprite.y = piece.rect.y + (tileSize/2);
+
+        const directionToRadians = {
+            'r' : () => 0,
+            'l' : () => Math.PI,
+            'u' : () => 1.5 * Math.PI,
+            'd' : () => Math.PI / 2
+        }
+
+        piece.sprite.rotation = directionToRadians[piece.direction](); 
+        
     }
 
     function setApple(game) {
 
-        let colliding = false;
-        let getters;
+        let colliding;
         let circle;
 
+        let x;
+        let y;
+        
         do {
 
-            let x = Math.floor(Math.random() * (800 - tileSize + 1)) + tileSize;
-            let y = Math.floor(Math.random() * (600 - tileSize + 1)) + tileSize;
+            if(circle != undefined)
+                circle.destroy();
 
-            console.log(x,y);
+            x = Math.floor(Math.random() * (800 - tileSize + 1)) + tileSize;
+            y = Math.floor(Math.random() * (600 - tileSize + 1)) + tileSize;
+
             x = Math.floor(x / tileSize) * tileSize - (tileSize / 2);
             y = Math.floor(y / tileSize) * tileSize - (tileSize / 2);
             console.log(x,y);
 
             circle = new Phaser.Geom.Circle(x, y, tileSize / 2);
-            
-            for(let i = 1; i < snakeBody.length && !colliding; i++)
-                colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeBody[i].rect);
 
-            if(!colliding)
-                colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeHead.rect);
+            colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeHead.rect);
+            
+            for(let i = 0; i < snakeBody.length && !colliding; i++)
+                colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeBody[i].rect);
 
         } while (colliding);
 
-        graphics = game.add.graphics({ fillStyle: { color: 0xff0000 } });
-        graphics.fillCircleShape(circle);
-        apple = {circle, graphics}
+        let spriteType = Phaser.Math.RND.pick(['robot_blue', 'robot_green', 'robot_red', 'robot_yellow']);
+
+        var sprite = game.add.image(x, y, spriteType).setScale(0.2);
+
+        sprite.rotation = Phaser.Math.RND.pick([0, Math.PI, 1.5 * Math.PI, Math.PI / 2]);
+
+        apple = {circle, sprite, spriteType}
 
     }
 
     function removeApple() {
-        apple.graphics.destroy();
+        apple.sprite.destroy();
     }
 
     function collisionCheck() {
@@ -192,6 +234,25 @@
         let appleC = Phaser.Geom.Rectangle.Overlaps(snakeHead.rect, apple.circle);
 
         return {selfC, appleC};
+
+    }
+
+    function renderBackground(game) {
+
+        for(let i = 0; i < game.sys.game.canvas.height / tileSize; i++) {
+            for(let j = 0; j < game.sys.game.canvas.width / tileSize; j++) {
+                let config8 = {
+                    key:  Math.random() >= 0.5 ? 'tile_grass_1': 'tile_grass_2',
+                    x: j * tileSize,
+                    y: i * tileSize,
+                    width: tileSize,
+                    height: tileSize,
+                    flipX: Math.random() >= 0.5,
+                    flipY: Math.random() >= 0.5
+                };
+                game.make.sprite(config8);
+            }
+        }
 
     }
 
