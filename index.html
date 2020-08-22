@@ -37,6 +37,12 @@
     let growSnake = false;
     let growType = undefined;
 
+    let pause = 1;
+
+    let stop = 0;
+
+    let pathSprites = [];
+
     function preload () {
 
         this.load.image('robot_head_blue', 'assets/sprites/robot_head_blue.png');
@@ -52,6 +58,10 @@
         this.load.image('tile_grass_1', 'assets/sprites/tileGrass1.png');
         this.load.image('tile_grass_2', 'assets/sprites/tileGrass2.png');
 
+        this.load.image('pause', 'assets/sprites/pause.png');
+
+        this.load.image('red', 'assets/sprites/red.png');
+
     }
 
     function create () {
@@ -59,6 +69,13 @@
     }
 
     function update (time, delta) {
+
+      
+
+        if(stop === 0) {
+
+        direction = aStar(euclideanDistance, this);
+
 
         const cursors = this.input.keyboard.createCursorKeys();
         if (cursors.left.isDown && direction != 'r' && direction != 'l') {
@@ -125,6 +142,8 @@
             elapsedTime = 0.0;
             
         }
+        stop = 0;
+        }
         
     }
 
@@ -148,6 +167,21 @@
 
         setSnakeHead(250,200, game);
         setApple(game);
+
+        let pause = game.add.sprite(100, 550, 'pause').setInteractive();
+        pause.setScale(0.5);
+        pause.on('pointerdown', function (pointer) {
+
+            if(stop === 0) {
+                this.setTint(0xff0000);
+                stop = 1;
+            } else {
+                this.setTint(0xffffff);
+                stop = 0;
+            }
+
+          
+        });
     }
 
     function setSnakeHead(x,y, game) {
@@ -197,8 +231,7 @@
 
             x = Math.floor(x / tileSize) * tileSize - (tileSize / 2);
             y = Math.floor(y / tileSize) * tileSize - (tileSize / 2);
-            console.log(x,y);
-
+        
             circle = new Phaser.Geom.Circle(x, y, tileSize / 2);
 
             colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeHead.rect);
@@ -251,6 +284,226 @@
             }
         }
 
+    }
+
+
+    function buildMap(game) {
+
+        const map = [];
+
+        for(let i = 0; i < game.sys.game.canvas.height / tileSize; i++) {
+            map[i] = [];
+            for(let j = 0; j < game.sys.game.canvas.width / tileSize; j++) {
+                map[i][j] = 0;
+            }
+        }
+
+        map[Math.floor(snakeHead.rect.y / tileSize)][ Math.floor(snakeHead.rect.x / tileSize)] = 1; 
+
+        for(snakePiece of snakeBody) {
+            map[Math.floor(snakePiece.rect.y / tileSize)][ Math.floor(snakePiece.rect.x / tileSize)] = 1; 
+        }
+
+        for(let i = 0; i < map.length; i++) {
+            let row = `${i} `;
+            for(let j = 0; j < map[i].length; j++) {
+                row += `${map[i][j]} `
+            }
+        }
+
+        return {
+                    map,
+                    start: {
+                                x: Math.floor(snakeHead.rect.x / tileSize),
+                                y: Math.floor(snakeHead.rect.y / tileSize),
+                                id: `${Math.floor(snakeHead.rect.x / tileSize)}:${Math.floor(snakeHead.rect.y / tileSize)}`
+                            },
+                    goal: {
+                                x: Math.floor(apple.circle.x / tileSize),
+                                y: Math.floor(apple.circle.y / tileSize),
+                                id: `${Math.floor(apple.circle.x / tileSize)}:${Math.floor(apple.circle.y / tileSize)}`
+                    }
+            }
+    }
+
+    function euclideanDistance(v1, v2) {
+		let dx = Math.abs(Math.round(v1.x) - Math.round(v2.x));
+	    let dy = Math.abs(Math.round(v1.y) - Math.round(v2.y));
+		return 1 * Math.sqrt(dx * dx + dy * dy);
+	}
+
+
+ 
+    /**
+     *  start goal  
+     * { 
+     *      x: number
+     *      y: number
+     * }
+     *  
+     **/
+
+    function aStar(h, game) {
+
+        let { map, start, goal } = buildMap(game);
+
+        const gScore = new Map();
+        const fScore = new Map();
+
+        const closeSet = [];
+        const openSet = []; //sort by fscore
+
+        const cameFrom = new Map();
+
+        openSet.push(start);
+        gScore.set(start.id, 0.0);
+        fScore.set(start.id, h(start, goal));
+
+
+        while(openSet.length > 0) {
+         
+            openSet.sort((a,b) => {
+                fScore.get(b.id) - fScore.get(a.id);
+            });
+            
+            let current = openSet.pop();
+            if(current.id === goal.id) {
+                console.log('done');
+
+                current = current.id;
+                const path = [];
+                path.push(current);
+
+                while(cameFrom.has(current)) {
+                    path.push(cameFrom.get(current));
+                    current = cameFrom.get(current);
+                }
+                path.pop()
+                
+                for(ps of pathSprites) {
+                    ps.destroy();
+                }
+
+                pathSprites.length = 0;
+
+                for(p of path) {
+                    let pp = p.split(':');
+                    var sprite = game.add.image(pp[0] * tileSize + tileSize/2, pp[1] * tileSize + tileSize/2, 'red').setScale(0.1);
+                    pathSprites.push(sprite);
+                }
+
+/*
+                console.log(path);
+
+
+                console.log('cameFrom', cameFrom);
+
+                console.log('map', map);
+                console.log('start', start);
+                console.log('goal', goal);
+                console.log('closeSet', closeSet);
+                console.log(gScore);
+                console.log(fScore);
+
+
+                const mapCopy = [...map];
+
+                for(c of closeSet) {
+                    if(mapCopy[c.y][c.x] === 0)
+                        mapCopy[c.y][c.x] = 'C';
+                }
+
+                for(let i = 0; i < mapCopy.length; i++) {
+                    let line = `${i} `;
+                    for(let j = 0; j < mapCopy[i].length; j++) {
+                        line += `${mapCopy[i][j]} `;
+                    }
+                    console.log(line);
+                }
+*/
+
+                let [nextX, nextY] = path[path.length-1].split(':');
+                //console.log(nextX, nextY)
+                //console.log(start.x, start.y)
+
+                let newDirection = undefined; 
+                if(nextX - start.x > 0) newDirection = 'r';
+                else if(nextX -start.x < 0) newDirection = 'l';
+                else if (nextY - start.y > 0) newDirection = 'd';
+                else if (nextY - start.y < 0) newDirection = 'u'; 
+
+                return newDirection;
+            }
+
+            closeSet.push(current);
+
+            const getAdjacentNodes = (node) => {
+                const nodes = [];
+                //console.log(map[0].length -1, map.length);
+
+
+                if(node.y != 0)
+                    nodes.push({x: node.x, y: node.y-1, id: `${node.x}:${node.y - 1}`});
+
+                if(node.y != map.length -1)
+                    nodes.push({x: node.x, y: node.y + 1, id: `${node.x}:${node.y + 1}`});
+
+                    if(node.x > 0)
+                    nodes.push({x: node.x-1, y: node.y, id: `${node.x-1}:${node.y}`});
+
+                if (node.x < map[0].length -1)
+                    nodes.push({x: node.x+1, y: node.y, id: `${node.x+1}:${node.y}`});
+
+                return nodes;
+            }
+
+            const dst = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+            
+            for(adjacentNode of getAdjacentNodes(current)) {
+                
+                if(closeSet.some(element => element.id === adjacentNode.id) || map[adjacentNode.y][adjacentNode.x] != 0) {
+                    continue;
+                }
+
+                let tentativeGScore = gScore.get(current.id) + dst(current, adjacentNode);
+                if(!openSet.some(element => element.id === adjacentNode.id)) {
+                    fScore.set(adjacentNode.id, Infinity);
+                    gScore.set(adjacentNode.id, Infinity);
+                    openSet.push(adjacentNode);
+                } else if(tentativeGScore >= gScore.get(adjacentNode.id))
+                    continue;
+
+                cameFrom.set(adjacentNode.id, current.id);
+                gScore.set(adjacentNode.id, tentativeGScore);
+                let heu = h(adjacentNode, goal);
+                fScore.set(adjacentNode.id, gScore.get(adjacentNode.id) + heu);
+
+                //console.log(openSet);
+
+            }
+        }
+
+        console.log('map', map);
+        console.log('start', start);
+        console.log('goal', goal);
+        console.log(closeSet);
+        console.log(gScore);
+        console.log(fScore);
+
+        const mapCopy = [...map];
+
+        for(c of closeSet) {
+            if(mapCopy[c.y][c.x] === 0)
+                mapCopy[c.y][c.x] = 'C';
+        }
+
+        for(let i = 0; i < mapCopy.length; i++) {
+            let line = `${i} `;
+            for(let j = 0; j < mapCopy[i].length; j++) {
+                line += `${mapCopy[i][j]} `;
+            }
+            console.log(line);
+        }
     }
 
     </script>
