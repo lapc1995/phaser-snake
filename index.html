@@ -74,7 +74,8 @@
 
         if(stop === 0) {
 
-        direction = aStar(manhattanDistance, this);
+        const nextDirection = aStar(manhattanDistance, this);
+        direction = nextDirection != undefined ? nextDirection : Phaser.Math.RND.pick(['d', 'u', 'l', 'r']);
 
 
         const cursors = this.input.keyboard.createCursorKeys();
@@ -447,17 +448,24 @@
 
                 if(node.x > 0)
                     nodes.push({x: node.x-1, y: node.y, id: `${node.x-1}:${node.y}`});
+                else
+                    nodes.push({x: map[0].length -1, y: node.y, id: `${map[0].length -1}:${node.y}`});
 
                 if (node.x < map[0].length -1)
                     nodes.push({x: node.x+1, y: node.y, id: `${node.x+1}:${node.y}`});
-
+                else
+                    nodes.push({x: 0, y: node.y, id: `0:${node.y}`});
+                
 
                 if(node.y != 0)
                     nodes.push({x: node.x, y: node.y-1, id: `${node.x}:${node.y - 1}`});
+                else
+                    nodes.push({x: node.x, y: map.length -1, id: `${node.x}:${map.length -1}`});
 
                 if(node.y != map.length -1)
                     nodes.push({x: node.x, y: node.y + 1, id: `${node.x}:${node.y + 1}`});
-
+                else
+                    nodes.push({x: node.x, y: 0, id: `${node.x}:0`});
 
                 return nodes;
             }
@@ -510,26 +518,7 @@
             }
         }
 
-        console.log('map', map);
-        console.log('start', start);
-        console.log('goal', goal);
-        console.log(closeSet);
-        console.log(gScore);
-        console.log(fScore);
-
-        const mapCopy = [...map];
-
-        for(c of closeSet) {
-            if(mapCopy[c.y][c.x] === 0)
-                mapCopy[c.y][c.x] = 'C';
-        }
-
-        for(let i = 0; i < mapCopy.length; i++) {
-            let line = `${i} `;
-            for(let j = 0; j < mapCopy[i].length; j++) {
-                line += `${mapCopy[i][j]} `;
-            }
-        }
+        return undefined;
     }
 
     </script>
