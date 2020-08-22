@@ -74,7 +74,7 @@
 
         if(stop === 0) {
 
-        direction = aStar(euclideanDistance, this);
+        direction = aStar(manhattanDistance, this);
 
 
         const cursors = this.input.keyboard.createCursorKeys();
@@ -332,6 +332,10 @@
 		return 1 * Math.sqrt(dx * dx + dy * dy);
 	}
 
+    function manhattanDistance(p1, p2) {
+        return Math.abs(p1.x-p2.x) + Math.abs(p1.y-p2.y);
+    }
+
 
  
     /**
@@ -362,13 +366,12 @@
 
         while(openSet.length > 0) {
          
-            openSet.sort((a,b) => {
-                fScore.get(b.id) - fScore.get(a.id);
-            });
+            openSet.sort((a,b) => fScore.get(b.id) - fScore.get(a.id));
             
             let current = openSet.pop();
+
             if(current.id === goal.id) {
-                console.log('done');
+                //console.log('done');
 
                 current = current.id;
                 const path = [];
@@ -442,25 +445,47 @@
                 //console.log(map[0].length -1, map.length);
 
 
+                if(node.x > 0)
+                    nodes.push({x: node.x-1, y: node.y, id: `${node.x-1}:${node.y}`});
+
+                if (node.x < map[0].length -1)
+                    nodes.push({x: node.x+1, y: node.y, id: `${node.x+1}:${node.y}`});
+
+
                 if(node.y != 0)
                     nodes.push({x: node.x, y: node.y-1, id: `${node.x}:${node.y - 1}`});
 
                 if(node.y != map.length -1)
                     nodes.push({x: node.x, y: node.y + 1, id: `${node.x}:${node.y + 1}`});
 
-                    if(node.x > 0)
-                    nodes.push({x: node.x-1, y: node.y, id: `${node.x-1}:${node.y}`});
-
-                if (node.x < map[0].length -1)
-                    nodes.push({x: node.x+1, y: node.y, id: `${node.x+1}:${node.y}`});
 
                 return nodes;
             }
 
             const dst = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
             
-            for(adjacentNode of getAdjacentNodes(current)) {
+            for(let adjacentNode of getAdjacentNodes(current)) {
+                //console.log(adjacentNode.id, current.id);
                 
+                if(closeSet.some(element => element.id === adjacentNode.id) || map[adjacentNode.y][adjacentNode.x] != 0) {
+                    continue;
+                }
+
+                let tentativeGScore = gScore.get(current.id) + dst(current, adjacentNode);
+                //console.log('tentativeScore', tentativeGScore, gScore.get(adjacentNode.id), adjacentNode.id, current.id);
+                if(gScore.get(adjacentNode) === undefined || tentativeGScore < gScore.get(adjacentNode.id)) {
+                    //console.log('got in');
+                    cameFrom.set(adjacentNode.id, current.id);
+                    gScore.set(adjacentNode.id, tentativeGScore);
+                    fScore.set(adjacentNode.id, gScore.get(adjacentNode.id) + h(adjacentNode, goal));
+
+                    //console.log(`N: ${adjacentNode.id}`, `GOAL: ${goal.id}`, `G: ${gScore.get(adjacentNode.id)}`, `H: ${h(adjacentNode, goal)}`)
+
+                    if(!openSet.some(element => element.id === adjacentNode.id)) {
+                        openSet.push(adjacentNode);
+                    }
+                }
+                /*
                 if(closeSet.some(element => element.id === adjacentNode.id) || map[adjacentNode.y][adjacentNode.x] != 0) {
                     continue;
                 }
@@ -476,9 +501,11 @@
                 cameFrom.set(adjacentNode.id, current.id);
                 gScore.set(adjacentNode.id, tentativeGScore);
                 let heu = h(adjacentNode, goal);
+                //console.log(heu);
                 fScore.set(adjacentNode.id, gScore.get(adjacentNode.id) + heu);
 
                 //console.log(openSet);
+                */
 
             }
         }
@@ -502,7 +529,6 @@
             for(let j = 0; j < mapCopy[i].length; j++) {
                 line += `${mapCopy[i][j]} `;
             }
-            console.log(line);
         }
     }
 
