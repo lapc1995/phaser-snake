@@ -6,6 +6,306 @@
 <body>
 
     <script>
+
+    class Snake {
+        constructor() {
+            this.snakeHead = undefined;
+            this.snakeBody = [];
+            this.direction = 'r';
+            this.growSnake = false;
+            this.growType = undefined;
+            this.auto = false;
+            this.pathSprites = [];
+        }
+
+        start(game, x, y, auto = false) {
+
+            this.direction = 'r';
+
+            if(this.snakeHead != undefined) {
+                this.snakeHead.sprite.destroy();
+            }
+
+            for(let bodyPart of this.snakeBody) {
+                bodyPart.sprite.destroy();
+            }
+
+            this.snakeBody.length = 0;
+
+            this.setSnakeHead(x,y, game);
+
+            this.auto = auto;
+        }
+
+        update(game, others) {
+
+            if(this.auto) {
+                const nextDirection = this.aStar(this.manhattanDistance, game);
+                this.direction = nextDirection != undefined ? nextDirection : Phaser.Math.RND.pick(['d', 'u', 'l', 'r']);
+            }
+
+            this.snakeHead.direction = this.direction;
+
+            let prevX = this.snakeHead.rect.x; 
+            let prevY = this.snakeHead.rect.y;
+            let prevDirection = this.snakeHead.direction;
+
+            const boundsCheck = {
+                'r' : () => this.snakeHead.rect.x = this.snakeHead.rect.x > 800 - (tileSize * 2) ? 0 : this.snakeHead.rect.x + tileSize,
+                'l' : () => this.snakeHead.rect.x = this.snakeHead.rect.x < tileSize ? 800 - tileSize : this.snakeHead.rect.x - tileSize,
+                'u' : () => this.snakeHead.rect.y = this.snakeHead.rect.y < tileSize ? 600 - tileSize : this.snakeHead.rect.y - tileSize,
+                'd' : () => this.snakeHead.rect.y = this.snakeHead.rect.y > 600 - (tileSize * 2) ? 0 : this.snakeHead.rect.y + tileSize,
+            }
+            boundsCheck[this.direction]();    
+            this.updateSnakePieceGraphics(this.snakeHead, game);
+
+            for(let i = 0; i < this.snakeBody.length; i++) {
+                let tempX = this.snakeBody[i].rect.x;
+                let tempY = this.snakeBody[i].rect.y;
+                let tempDirection = this.snakeBody[i].direction;
+                this.snakeBody[i].rect.x = prevX;
+                this.snakeBody[i].rect.y = prevY;
+                this.snakeBody[i].direction = prevDirection;
+                prevX = tempX;
+                prevY = tempY;
+                prevDirection = tempDirection;
+                this.updateSnakePieceGraphics(this.snakeBody[i], game);
+            }
+
+            if(this.growSnake) {
+                this.addSnakePiece(prevX,prevY, this.direction, game, this.growType);
+                this.growSnake = false;
+                this.growType = undefined;
+            } 
+
+            const {selfC, appleC} = this.collisionCheck(others);
+
+            if(appleC) {
+                this.growType = apple.spriteType;
+                this.growSnake = true;
+            }
+
+            return {selfC,appleC};
+        }
+
+        setDirection(direction) {
+
+            if( (direction != this.direction) && 
+                (
+                    (direction === 'l' && this.direction != 'r') ||
+                    (direction === 'r' && this.direction != 'l') ||
+                    (direction === 'u' && this.direction != 'd') ||
+                    (direction === 'd' && this.direction != 'u')
+                )       
+            ) this.direction = direction
+
+        }
+
+        addSnakePiece(x,y, direction, game, type = 'robot_blue') {
+            var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
+            var sprite = game.add.image(x+(tileSize/2), y+(tileSize/2), type).setScale(0.2);
+            let piece = {rect, sprite, direction};
+            this.snakeBody.push(piece);
+        }
+
+        updateSnakePieceGraphics(piece, game) {
+
+            piece.sprite.x = piece.rect.x + (tileSize/2);
+            piece.sprite.y = piece.rect.y + (tileSize/2);
+
+            const directionToRadians = {
+                'r' : () => 0,
+                'l' : () => Math.PI,
+                'u' : () => 1.5 * Math.PI,
+                'd' : () => Math.PI / 2
+            }
+
+            piece.sprite.rotation = directionToRadians[piece.direction](); 
+            
+            
+        }
+
+        collisionCheck(others) {
+
+            let selfC = false;
+            for(let i = 0; i < this.snakeBody.length && !selfC; i++)
+                selfC = Phaser.Geom.Rectangle.Overlaps(this.snakeHead.rect, this.snakeBody[i].rect);
+
+            let appleC = false;
+            for(let o of others) {
+                appleC = Phaser.Geom.Rectangle.Overlaps(this.snakeHead.rect, o.circle);
+            }
+            
+            return {selfC, appleC};
+
+        }
+
+        setSnakeHead(x,y, game) {
+            var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
+            let spriteType = Phaser.Math.RND.pick(['robot_head_blue', 'robot_head_green', 'robot_head_red', 'robot_head_yellow']);
+            var sprite = game.add.image(x+(tileSize/2), y+(tileSize/2),spriteType);
+            sprite.setScale(0.2)
+            var direction = 'r';
+            this.snakeHead = {rect, sprite, direction}
+        }
+
+        buildMap(game) {
+
+            const map = [];
+
+            for(let i = 0; i < game.sys.game.canvas.height / tileSize; i++) {
+                map[i] = [];
+                for(let j = 0; j < game.sys.game.canvas.width / tileSize; j++) {
+                    map[i][j] = 0;
+                }
+            }
+
+            map[Math.floor(this.snakeHead.rect.y / tileSize)][ Math.floor(this.snakeHead.rect.x / tileSize)] = 1; 
+
+            for(let snakePiece of this.snakeBody) {
+                map[Math.floor(snakePiece.rect.y / tileSize)][ Math.floor(snakePiece.rect.x / tileSize)] = 1; 
+            }
+
+            for(let i = 0; i < map.length; i++) {
+                let row = `${i} `;
+                for(let j = 0; j < map[i].length; j++) {
+                    row += `${map[i][j]} `
+                }
+            }
+
+            return {
+                        map,
+                        start: {
+                                    x: Math.floor(this.snakeHead.rect.x / tileSize),
+                                    y: Math.floor(this.snakeHead.rect.y / tileSize),
+                                    id: `${Math.floor(this.snakeHead.rect.x / tileSize)}:${Math.floor(this.snakeHead.rect.y / tileSize)}`
+                                },
+                        goal: {
+                                    x: Math.floor(apple.circle.x / tileSize),
+                                    y: Math.floor(apple.circle.y / tileSize),
+                                    id: `${Math.floor(apple.circle.x / tileSize)}:${Math.floor(apple.circle.y / tileSize)}`
+                        }
+                }
+        }
+
+        manhattanDistance(p1, p2) {
+            return Math.abs(p1.x-p2.x) + Math.abs(p1.y-p2.y);
+        }
+
+        aStar(h, game) {
+
+            let { map, start, goal } = this.buildMap(game);
+
+            const gScore = new Map();
+            const fScore = new Map();
+
+            const closeSet = [];
+            const openSet = []; //sort by fscore
+
+            const cameFrom = new Map();
+
+            openSet.push(start);
+            gScore.set(start.id, 0.0);
+            fScore.set(start.id, h(start, goal));
+
+
+            while(openSet.length > 0) {
+            
+                openSet.sort((a,b) => fScore.get(b.id) - fScore.get(a.id));
+                
+                let current = openSet.pop();
+
+                if(current.id === goal.id) {
+
+                    current = current.id;
+                    const path = [];
+                    path.push(current);
+
+                    while(cameFrom.has(current)) {
+                        path.push(cameFrom.get(current));
+                        current = cameFrom.get(current);
+                    }
+                    path.pop()
+                    
+                    for(let ps of this.pathSprites) {
+                        ps.destroy();
+                    }
+
+                    this.pathSprites.length = 0;
+
+                    for(let p of path) {
+                        let pp = p.split(':');
+                        var sprite = game.add.image(pp[0] * tileSize + tileSize/2, pp[1] * tileSize + tileSize/2, 'red').setScale(0.1);
+                        this.pathSprites.push(sprite);
+                    }
+
+                    let [nextX, nextY] = path[path.length-1].split(':');
+
+                    let newDirection = undefined; 
+                    if(nextX - start.x > 0) newDirection = 'r';
+                    else if(nextX -start.x < 0) newDirection = 'l';
+                    else if (nextY - start.y > 0) newDirection = 'd';
+                    else if (nextY - start.y < 0) newDirection = 'u'; 
+
+                    return newDirection;
+                }
+
+                closeSet.push(current);
+
+                const getAdjacentNodes = (node) => {
+                    const nodes = [];
+    
+                    if(node.x > 0)
+                        nodes.push({x: node.x-1, y: node.y, id: `${node.x-1}:${node.y}`});
+                    else
+                        nodes.push({x: map[0].length -1, y: node.y, id: `${map[0].length -1}:${node.y}`});
+
+                    if (node.x < map[0].length -1)
+                        nodes.push({x: node.x+1, y: node.y, id: `${node.x+1}:${node.y}`});
+                    else
+                        nodes.push({x: 0, y: node.y, id: `0:${node.y}`});
+                    
+
+                    if(node.y != 0)
+                        nodes.push({x: node.x, y: node.y-1, id: `${node.x}:${node.y - 1}`});
+                    else
+                        nodes.push({x: node.x, y: map.length -1, id: `${node.x}:${map.length -1}`});
+
+                    if(node.y != map.length -1)
+                        nodes.push({x: node.x, y: node.y + 1, id: `${node.x}:${node.y + 1}`});
+                    else
+                        nodes.push({x: node.x, y: 0, id: `${node.x}:0`});
+
+                    return nodes;
+                }
+
+                const dst = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+                
+                for(let adjacentNode of getAdjacentNodes(current)) {
+          
+                    if(closeSet.some(element => element.id === adjacentNode.id) || map[adjacentNode.y][adjacentNode.x] != 0) {
+                        continue;
+                    }
+
+                    let tentativeGScore = gScore.get(current.id) + dst(current, adjacentNode);
+            
+                    if(gScore.get(adjacentNode) === undefined || tentativeGScore < gScore.get(adjacentNode.id)) {;
+                        cameFrom.set(adjacentNode.id, current.id);
+                        gScore.set(adjacentNode.id, tentativeGScore);
+                        fScore.set(adjacentNode.id, gScore.get(adjacentNode.id) + h(adjacentNode, goal));
+
+                        if(!openSet.some(element => element.id === adjacentNode.id)) {
+                            openSet.push(adjacentNode);
+                        }
+                    }
+                }
+            }
+            return undefined;
+        }
+
+    }
+
+
     const config = {
         type: Phaser.AUTO,
         width: 800,
@@ -24,24 +324,14 @@
     };
 
     const game = new Phaser.Game(config);
-
     const tileSize = 25;
-
-    let snakeHead;
-    const snakeBody = [];
     let apple;
-
     let elapsedTime = 0.0;
-    let direction = 'r';
-
-    let growSnake = false;
-    let growType = undefined;
-
-    let pause = 1;
-
-    let stop = 0;
-
-    let pathSprites = [];
+    let maxDelta = 1;
+    let pause = 0;
+    let keyboardInput;
+    let snake1;
+    //let snake2;
 
     function preload () {
 
@@ -59,213 +349,67 @@
         this.load.image('tile_grass_2', 'assets/sprites/tileGrass2.png');
 
         this.load.image('pause', 'assets/sprites/pause.png');
-
         this.load.image('red', 'assets/sprites/red.png');
 
     }
 
     function create () {
-        gameStart(this);
+
+        keyboardInput = this.input.keyboard.createCursorKeys();
+        snake1 = new Snake();
+        snake2 = new Snake();
+        renderBackground(this); 
+
+       
+
+        snake1.start(this, 200, 200, true);
+        //snake2.start(this, 100, 200, true);
+
+        setApple(this);
+
+        let pauseButton = this.add.sprite(100, 550, 'pause').setInteractive();
+        pauseButton.setScale(0.5);
+        pauseButton.on('pointerdown', function (pointer) {
+
+            if(pause === 0) {
+                this.setTint(0xff0000);
+                pause = 1;
+            } else {
+                this.setTint(0xffffff);
+                pause = 0;
+            }
+
+        });
     }
 
     function update (time, delta) {
 
-      
+        if(pause === 0) {
 
-        if(stop === 0) {
+            if (keyboardInput.left.isDown) snake1.setDirection('l');
+            else if (keyboardInput.right.isDown) snake1.setDirection('r');
+            else if (keyboardInput.up.isDown) snake1.setDirection('u');
+            else if (keyboardInput.down.isDown) snake1.setDirection('d');
 
-        const nextDirection = aStar(manhattanDistance, this);
-        direction = nextDirection != undefined ? nextDirection : Phaser.Math.RND.pick(['d', 'u', 'l', 'r']);
+            elapsedTime += delta;
 
+            if(elapsedTime > maxDelta) {
 
-        const cursors = this.input.keyboard.createCursorKeys();
-        if (cursors.left.isDown && direction != 'r' && direction != 'l') {
-            direction = 'l';
-        }else if (cursors.right.isDown && direction != 'r' && direction != 'l') {
-            direction = 'r';
-        }
-        else if (cursors.up.isDown && direction != 'u' && direction != 'd') {
-            direction = 'u';
-        }
-        else if (cursors.down.isDown && direction != 'u' && direction != 'd') {
-            direction = 'd';
-        }
+                const {appleC, selfC} = snake1.update(this,[apple]);
+                //const r2 = snake2.update(this,[apple]);
 
-        snakeHead.direction = direction;
+                if(appleC /*|| r2.appleC*/) {
+                    removeApple();
+                    setApple(this);
+                } else if(selfC) {
+                    snake1.start(this, 200, 200, true);
+                    removeApple();
+                    setApple(this);
+                }
 
-        elapsedTime += delta;
-
-        if(elapsedTime > 60) {
-
-            let prevX = snakeHead.rect.x; 
-            let prevY = snakeHead.rect.y;
-            let prevDirection = snakeHead.direction;
-
-            const boundsCheck = {
-                'r' : () => snakeHead.rect.x = snakeHead.rect.x > 800 - (tileSize * 2) ? 0 : snakeHead.rect.x + tileSize,
-                'l' : () => snakeHead.rect.x = snakeHead.rect.x < tileSize ? 800 - tileSize : snakeHead.rect.x - tileSize,
-                'u' : () => snakeHead.rect.y = snakeHead.rect.y < tileSize ? 600 - tileSize : snakeHead.rect.y - tileSize,
-                'd' : () => snakeHead.rect.y = snakeHead.rect.y > 600 - (tileSize * 2) ? 0 : snakeHead.rect.y + tileSize,
+                elapsedTime = 0.0;
             }
-            boundsCheck[direction]();    
-            updateSnakePieceGraphics(snakeHead, this);
-
-            for(let i = 0; i < snakeBody.length; i++) {
-                let tempX = snakeBody[i].rect.x;
-                let tempY = snakeBody[i].rect.y;
-                let tempDirection = snakeBody[i].direction;
-                snakeBody[i].rect.x = prevX;
-                snakeBody[i].rect.y = prevY;
-                snakeBody[i].direction = prevDirection;
-                prevX = tempX;
-                prevY = tempY;
-                prevDirection = tempDirection;
-                updateSnakePieceGraphics(snakeBody[i], this);
-            }
-
-            if(growSnake) {
-                addSnakePiece(prevX,prevY, direction, this, growType);
-                growSnake = false;
-                growType = undefined;
-            } 
-
-            const {selfC, appleC} = collisionCheck();
-
-            if(appleC) {
-                growType = apple.spriteType;
-                removeApple();
-                setApple(this);
-                growSnake = true;
-            } else if(selfC) {
-                gameStart(this);
-            }
-
-            elapsedTime = 0.0;
-            
         }
-        stop = 0;
-        }
-        
-    }
-
-    function gameStart(game) {
-
-        renderBackground(game); 
-
-        direction = 'r';
-
-        if(snakeHead != undefined) {
-            snakeHead.sprite.destroy();
-        }
-
-        for(bodyPart of snakeBody) {
-            bodyPart.sprite.destroy();
-        }
-        snakeBody.length = 0;
-
-        if(apple != undefined)
-            apple.sprite.destroy();
-
-        setSnakeHead(250,200, game);
-        setApple(game);
-
-        let pause = game.add.sprite(100, 550, 'pause').setInteractive();
-        pause.setScale(0.5);
-        pause.on('pointerdown', function (pointer) {
-
-            if(stop === 0) {
-                this.setTint(0xff0000);
-                stop = 1;
-            } else {
-                this.setTint(0xffffff);
-                stop = 0;
-            }
-
-          
-        });
-    }
-
-    function setSnakeHead(x,y, game) {
-        var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
-        let spriteType = Phaser.Math.RND.pick(['robot_head_blue', 'robot_head_green', 'robot_head_red', 'robot_head_yellow']);
-        var sprite = game.add.image(x+(tileSize/2), y+(tileSize/2),spriteType);
-        sprite.setScale(0.2)
-        var direction = 'r';
-        snakeHead = {rect, sprite, direction}
-    }
-
-    function addSnakePiece(x,y, direction, game, type = 'robot_blue') {
-        var rect = new Phaser.Geom.Rectangle(x, y, tileSize, tileSize);
-        var sprite = game.add.image(x+(tileSize/2), y+(tileSize/2), type).setScale(0.2);
-        let piece = {rect, sprite, direction};
-        snakeBody.push(piece);
-    }
-
-    function updateSnakePieceGraphics(piece, game) {
-
-        piece.sprite.x = piece.rect.x + (tileSize/2);
-        piece.sprite.y = piece.rect.y + (tileSize/2);
-
-        const directionToRadians = {
-            'r' : () => 0,
-            'l' : () => Math.PI,
-            'u' : () => 1.5 * Math.PI,
-            'd' : () => Math.PI / 2
-        }
-
-        piece.sprite.rotation = directionToRadians[piece.direction](); 
-        
-    }
-
-    function setApple(game) {
-
-        let colliding;
-        let circle;
-
-        let x;
-        let y;
-
-        do {
-
-            x = Math.floor(Math.random() * (800 - tileSize + 1)) + tileSize;
-            y = Math.floor(Math.random() * (600 - tileSize + 1)) + tileSize;
-
-            x = Math.floor(x / tileSize) * tileSize - (tileSize / 2);
-            y = Math.floor(y / tileSize) * tileSize - (tileSize / 2);
-        
-            circle = new Phaser.Geom.Circle(x, y, tileSize / 2);
-
-            colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeHead.rect);
-            
-            for(let i = 0; i < snakeBody.length && !colliding; i++)
-                colliding = Phaser.Geom.Rectangle.Overlaps(circle, snakeBody[i].rect);
-
-        } while (colliding);
-
-        let spriteType = Phaser.Math.RND.pick(['robot_blue', 'robot_green', 'robot_red', 'robot_yellow']);
-
-        var sprite = game.add.image(x, y, spriteType).setScale(0.2);
-
-        sprite.rotation = Phaser.Math.RND.pick([0, Math.PI, 1.5 * Math.PI, Math.PI / 2]);
-
-        apple = {circle, sprite, spriteType}
-
-    }
-
-    function removeApple() {
-        apple.sprite.destroy();
-    }
-
-    function collisionCheck() {
-
-        let selfC = false;
-        for(let i = 0; i < snakeBody.length && !selfC; i++)
-            selfC = Phaser.Geom.Rectangle.Overlaps(snakeHead.rect, snakeBody[i].rect);
-
-        let appleC = Phaser.Geom.Rectangle.Overlaps(snakeHead.rect, apple.circle);
-
-        return {selfC, appleC};
-
     }
 
     function renderBackground(game) {
@@ -287,238 +431,43 @@
 
     }
 
+    function setApple(game) {
 
-    function buildMap(game) {
+        let colliding;
+        let circle;
 
-        const map = [];
+        let x;
+        let y;
 
-        for(let i = 0; i < game.sys.game.canvas.height / tileSize; i++) {
-            map[i] = [];
-            for(let j = 0; j < game.sys.game.canvas.width / tileSize; j++) {
-                map[i][j] = 0;
-            }
-        }
+        do {
 
-        map[Math.floor(snakeHead.rect.y / tileSize)][ Math.floor(snakeHead.rect.x / tileSize)] = 1; 
+            x = Math.floor(Math.random() * (800 - tileSize + 1)) + tileSize;
+            y = Math.floor(Math.random() * (600 - tileSize + 1)) + tileSize;
 
-        for(snakePiece of snakeBody) {
-            map[Math.floor(snakePiece.rect.y / tileSize)][ Math.floor(snakePiece.rect.x / tileSize)] = 1; 
-        }
+            x = Math.floor(x / tileSize) * tileSize - (tileSize / 2);
+            y = Math.floor(y / tileSize) * tileSize - (tileSize / 2);
 
-        for(let i = 0; i < map.length; i++) {
-            let row = `${i} `;
-            for(let j = 0; j < map[i].length; j++) {
-                row += `${map[i][j]} `
-            }
-        }
+            circle = new Phaser.Geom.Circle(x, y, tileSize / 2);
 
-        return {
-                    map,
-                    start: {
-                                x: Math.floor(snakeHead.rect.x / tileSize),
-                                y: Math.floor(snakeHead.rect.y / tileSize),
-                                id: `${Math.floor(snakeHead.rect.x / tileSize)}:${Math.floor(snakeHead.rect.y / tileSize)}`
-                            },
-                    goal: {
-                                x: Math.floor(apple.circle.x / tileSize),
-                                y: Math.floor(apple.circle.y / tileSize),
-                                id: `${Math.floor(apple.circle.x / tileSize)}:${Math.floor(apple.circle.y / tileSize)}`
-                    }
-            }
+            colliding = Phaser.Geom.Rectangle.Overlaps(circle, snake1.snakeHead.rect);
+            
+            for(let i = 0; i < snake1.snakeBody.length && !colliding; i++)
+                colliding = Phaser.Geom.Rectangle.Overlaps(circle, snake1.snakeBody[i].rect);
+
+        } while (colliding);
+
+        let spriteType = Phaser.Math.RND.pick(['robot_blue', 'robot_green', 'robot_red', 'robot_yellow']);
+
+        var sprite = game.add.image(x, y, spriteType).setScale(0.2);
+
+        sprite.rotation = Phaser.Math.RND.pick([0, Math.PI, 1.5 * Math.PI, Math.PI / 2]);
+
+        apple = {circle, sprite, spriteType}
+
     }
 
-    function euclideanDistance(v1, v2) {
-		let dx = Math.abs(Math.round(v1.x) - Math.round(v2.x));
-	    let dy = Math.abs(Math.round(v1.y) - Math.round(v2.y));
-		return 1 * Math.sqrt(dx * dx + dy * dy);
-	}
-
-    function manhattanDistance(p1, p2) {
-        return Math.abs(p1.x-p2.x) + Math.abs(p1.y-p2.y);
-    }
-
-
- 
-    /**
-     *  start goal  
-     * { 
-     *      x: number
-     *      y: number
-     * }
-     *  
-     **/
-
-    function aStar(h, game) {
-
-        let { map, start, goal } = buildMap(game);
-
-        const gScore = new Map();
-        const fScore = new Map();
-
-        const closeSet = [];
-        const openSet = []; //sort by fscore
-
-        const cameFrom = new Map();
-
-        openSet.push(start);
-        gScore.set(start.id, 0.0);
-        fScore.set(start.id, h(start, goal));
-
-
-        while(openSet.length > 0) {
-         
-            openSet.sort((a,b) => fScore.get(b.id) - fScore.get(a.id));
-            
-            let current = openSet.pop();
-
-            if(current.id === goal.id) {
-                //console.log('done');
-
-                current = current.id;
-                const path = [];
-                path.push(current);
-
-                while(cameFrom.has(current)) {
-                    path.push(cameFrom.get(current));
-                    current = cameFrom.get(current);
-                }
-                path.pop()
-                
-                for(ps of pathSprites) {
-                    ps.destroy();
-                }
-
-                pathSprites.length = 0;
-
-                for(p of path) {
-                    let pp = p.split(':');
-                    var sprite = game.add.image(pp[0] * tileSize + tileSize/2, pp[1] * tileSize + tileSize/2, 'red').setScale(0.1);
-                    pathSprites.push(sprite);
-                }
-
-/*
-                console.log(path);
-
-
-                console.log('cameFrom', cameFrom);
-
-                console.log('map', map);
-                console.log('start', start);
-                console.log('goal', goal);
-                console.log('closeSet', closeSet);
-                console.log(gScore);
-                console.log(fScore);
-
-
-                const mapCopy = [...map];
-
-                for(c of closeSet) {
-                    if(mapCopy[c.y][c.x] === 0)
-                        mapCopy[c.y][c.x] = 'C';
-                }
-
-                for(let i = 0; i < mapCopy.length; i++) {
-                    let line = `${i} `;
-                    for(let j = 0; j < mapCopy[i].length; j++) {
-                        line += `${mapCopy[i][j]} `;
-                    }
-                    console.log(line);
-                }
-*/
-
-                let [nextX, nextY] = path[path.length-1].split(':');
-                //console.log(nextX, nextY)
-                //console.log(start.x, start.y)
-
-                let newDirection = undefined; 
-                if(nextX - start.x > 0) newDirection = 'r';
-                else if(nextX -start.x < 0) newDirection = 'l';
-                else if (nextY - start.y > 0) newDirection = 'd';
-                else if (nextY - start.y < 0) newDirection = 'u'; 
-
-                return newDirection;
-            }
-
-            closeSet.push(current);
-
-            const getAdjacentNodes = (node) => {
-                const nodes = [];
-                //console.log(map[0].length -1, map.length);
-
-
-                if(node.x > 0)
-                    nodes.push({x: node.x-1, y: node.y, id: `${node.x-1}:${node.y}`});
-                else
-                    nodes.push({x: map[0].length -1, y: node.y, id: `${map[0].length -1}:${node.y}`});
-
-                if (node.x < map[0].length -1)
-                    nodes.push({x: node.x+1, y: node.y, id: `${node.x+1}:${node.y}`});
-                else
-                    nodes.push({x: 0, y: node.y, id: `0:${node.y}`});
-                
-
-                if(node.y != 0)
-                    nodes.push({x: node.x, y: node.y-1, id: `${node.x}:${node.y - 1}`});
-                else
-                    nodes.push({x: node.x, y: map.length -1, id: `${node.x}:${map.length -1}`});
-
-                if(node.y != map.length -1)
-                    nodes.push({x: node.x, y: node.y + 1, id: `${node.x}:${node.y + 1}`});
-                else
-                    nodes.push({x: node.x, y: 0, id: `${node.x}:0`});
-
-                return nodes;
-            }
-
-            const dst = (a, b) => Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
-            
-            for(let adjacentNode of getAdjacentNodes(current)) {
-                //console.log(adjacentNode.id, current.id);
-                
-                if(closeSet.some(element => element.id === adjacentNode.id) || map[adjacentNode.y][adjacentNode.x] != 0) {
-                    continue;
-                }
-
-                let tentativeGScore = gScore.get(current.id) + dst(current, adjacentNode);
-                //console.log('tentativeScore', tentativeGScore, gScore.get(adjacentNode.id), adjacentNode.id, current.id);
-                if(gScore.get(adjacentNode) === undefined || tentativeGScore < gScore.get(adjacentNode.id)) {
-                    //console.log('got in');
-                    cameFrom.set(adjacentNode.id, current.id);
-                    gScore.set(adjacentNode.id, tentativeGScore);
-                    fScore.set(adjacentNode.id, gScore.get(adjacentNode.id) + h(adjacentNode, goal));
-
-                    //console.log(`N: ${adjacentNode.id}`, `GOAL: ${goal.id}`, `G: ${gScore.get(adjacentNode.id)}`, `H: ${h(adjacentNode, goal)}`)
-
-                    if(!openSet.some(element => element.id === adjacentNode.id)) {
-                        openSet.push(adjacentNode);
-                    }
-                }
-                /*
-                if(closeSet.some(element => element.id === adjacentNode.id) || map[adjacentNode.y][adjacentNode.x] != 0) {
-                    continue;
-                }
-
-                let tentativeGScore = gScore.get(current.id) + dst(current, adjacentNode);
-                if(!openSet.some(element => element.id === adjacentNode.id)) {
-                    fScore.set(adjacentNode.id, Infinity);
-                    gScore.set(adjacentNode.id, Infinity);
-                    openSet.push(adjacentNode);
-                } else if(tentativeGScore >= gScore.get(adjacentNode.id))
-                    continue;
-
-                cameFrom.set(adjacentNode.id, current.id);
-                gScore.set(adjacentNode.id, tentativeGScore);
-                let heu = h(adjacentNode, goal);
-                //console.log(heu);
-                fScore.set(adjacentNode.id, gScore.get(adjacentNode.id) + heu);
-
-                //console.log(openSet);
-                */
-
-            }
-        }
-
-        return undefined;
+    function removeApple() {
+        apple.sprite.destroy();
     }
 
     </script>
